@@ -4,7 +4,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { 
   Film, Sparkles, Search, Star, MessageSquare, Send, Info, Bookmark, User, 
   RefreshCw, AlertCircle, Check, X, Flame, Key, SlidersHorizontal, ArrowRight,
-  ExternalLink, Layers, Play, Clock, Heart, Filter, ChevronRight
+  ExternalLink, Layers, Play, Clock, Heart, Filter, ChevronRight, LogIn, LogOut,
+  UserCircle, Settings, Shield
 } from "lucide-react";
 import { MOCK_MOVIES } from "@/data/movies";
 
@@ -23,6 +24,14 @@ interface MovieRecommendation {
   similarity_score: number;
   final_score?: number;
   match_reason: string;
+}
+
+interface UserProfile {
+  name: string;
+  email: string;
+  avatar: string;
+  preferredGenres: string[];
+  isLoggedIn: boolean;
 }
 
 const EXAMPLE_CHIPS = [
@@ -76,14 +85,26 @@ export default function Home() {
   const [searchPrompt, setSearchPrompt] = useState("");
   const [recommendations, setRecommendations] = useState<MovieRecommendation[]>([]);
   const [enhancedQuery, setEnhancedQuery] = useState<string>("");
-  const [extractedIntent, setExtractedIntent] = useState<any>(null);
   
-  // Loading & State
+  // Loading & Modals
   const [isLoading, setIsLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState<"intent" | "embedding" | "ranking">("intent");
   const [selectedMovie, setSelectedMovie] = useState<MovieRecommendation | null>(null);
+  const [showProfileModal, setShowProfileModal] = useState<boolean>(false);
+  const [showWatchlistModal, setShowWatchlistModal] = useState<boolean>(false);
   const [watchlist, setWatchlist] = useState<number[]>([]);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // User Authentication / Profile State
+  const [user, setUser] = useState<UserProfile>({
+    name: "Kaustubh Tiwari",
+    email: "kaustubh@example.com",
+    avatar: "https://avatars.githubusercontent.com/u/142834906?v=4",
+    preferredGenres: ["Sci-Fi", "Psychological Thriller", "Drama"],
+    isLoggedIn: false
+  });
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginName, setLoginName] = useState("");
 
   // Filters
   const [minRating, setMinRating] = useState<number>(0.0);
@@ -91,6 +112,24 @@ export default function Home() {
   const [sortBy, setSortBy] = useState<"similarity" | "rating" | "year">("similarity");
 
   const resultsRef = useRef<HTMLDivElement>(null);
+
+  // Load user session from localStorage
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const savedUser = localStorage.getItem("cinematch_user");
+      if (savedUser) {
+        try {
+          setUser(JSON.parse(savedUser));
+        } catch (e) {}
+      }
+      const savedWatchlist = localStorage.getItem("cinematch_watchlist");
+      if (savedWatchlist) {
+        try {
+          setWatchlist(JSON.parse(savedWatchlist));
+        } catch (e) {}
+      }
+    }
+  }, []);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -109,12 +148,9 @@ export default function Home() {
     setIsLoading(true);
     setLoadingStep("intent");
     setEnhancedQuery("");
-    setExtractedIntent(null);
 
-    // Step 1: Simulate / Call FastAPI Backend
     try {
-      // Transition to Stage 2
-      setTimeout(() => setLoadingStep("embedding"), 400);
+      setTimeout(() => setLoadingStep("embedding"), 350);
 
       // Attempt FastAPI call first
       let apiSuccess = false;
@@ -130,30 +166,25 @@ export default function Home() {
           if (data.success && data.recommendations) {
             setRecommendations(data.recommendations);
             setEnhancedQuery(data.enhanced_query || prompt);
-            setExtractedIntent(data.intent);
             apiSuccess = true;
           }
         }
       } catch (err) {
-        // FastAPI backend offline; proceed to resilient local semantic ML computation
+        // FastAPI offline; fallback to local semantic match
       }
 
-      // Step 2: Resilient Local Semantic ML Recommendation (Guarantees zero downtime)
+      // Resilient Local Semantic ML Match
       if (!apiSuccess) {
-        setTimeout(() => setLoadingStep("ranking"), 800);
+        setTimeout(() => setLoadingStep("ranking"), 700);
 
         setTimeout(() => {
           const pLower = prompt.toLowerCase();
           
-          // Compute token similarity & semantic feature match against local catalog
-          const scored = MOCK_MOVIES.map((movie, idx) => {
+          const scored = MOCK_MOVIES.map((movie) => {
             const mText = `${movie.title} ${movie.genres.replace(/\|/g, " ")}`.toLowerCase();
             const genreList = movie.genres.split("|");
             
-            // Heuristic Semantic Cosine approximation
             let simScore = 0.45;
-            
-            // Keyword matches
             const keywords = pLower.split(/\s+/).filter(w => w.length > 3);
             let matchedKw = 0;
             keywords.forEach(kw => {
@@ -161,7 +192,6 @@ export default function Home() {
             });
             simScore += Math.min(0.40, matchedKw * 0.15);
 
-            // Genre alignment
             if (pLower.includes("sci-fi") && movie.genres.includes("Sci-Fi")) simScore += 0.25;
             if (pLower.includes("thrill") && movie.genres.includes("Thriller")) simScore += 0.25;
             if (pLower.includes("drama") && movie.genres.includes("Drama")) simScore += 0.15;
@@ -186,9 +216,9 @@ export default function Home() {
               year: parseInt(movie.title.match(/\((\d{4})\)/)?.[1] || "2020"),
               genres: genreList,
               overview: `An acclaimed ${genreList.join(", ")} story featuring deep thematic tension, character depth, and striking cinematography.`,
-              rating: Math.round(rawRating * 2 * 10) / 10, // Scale to 10.0
+              rating: Math.round(rawRating * 2 * 10) / 10,
               vote_count: 850000,
-              director: "Christopher Nolan / Acclaimed Director",
+              director: "Acclaimed Director",
               poster_path: poster,
               similarity_score: Math.round(Math.min(0.98, simScore) * 100) / 100,
               final_score: Math.round(Math.min(0.99, finalScore) * 100) / 100,
@@ -196,7 +226,6 @@ export default function Home() {
             };
           });
 
-          // Sort descending by finalScore
           const ranked = scored
             .sort((a, b) => (b.final_score || b.similarity_score) - (a.final_score || a.similarity_score))
             .slice(0, 12)
@@ -205,7 +234,7 @@ export default function Home() {
           setRecommendations(ranked);
           setEnhancedQuery(prompt);
           setIsLoading(false);
-        }, 900);
+        }, 800);
       } else {
         setIsLoading(false);
       }
@@ -215,13 +244,52 @@ export default function Home() {
   };
 
   const toggleWatchlist = (id: number, title: string) => {
+    let updated: number[] = [];
     if (watchlist.includes(id)) {
-      setWatchlist(prev => prev.filter(item => item !== id));
+      updated = watchlist.filter(item => item !== id);
       showToast(`Removed "${title}" from watchlist`);
     } else {
-      setWatchlist(prev => [...prev, id]);
+      updated = [...watchlist, id];
       showToast(`Added "${title}" to your watchlist!`);
     }
+    setWatchlist(updated);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("cinematch_watchlist", JSON.stringify(updated));
+    }
+  };
+
+  const handleLoginSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!loginName.trim()) return;
+    const updatedUser: UserProfile = {
+      name: loginName,
+      email: loginEmail || `${loginName.toLowerCase().replace(/\s+/g, "")}@example.com`,
+      avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(loginName)}`,
+      preferredGenres: ["Sci-Fi", "Thriller", "Action"],
+      isLoggedIn: true
+    };
+    setUser(updatedUser);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("cinematch_user", JSON.stringify(updatedUser));
+    }
+    setShowProfileModal(false);
+    showToast(`Welcome back, ${loginName}!`);
+  };
+
+  const handleLogout = () => {
+    const defaultUser: UserProfile = {
+      name: "Guest User",
+      email: "guest@cinematch.ai",
+      avatar: "",
+      preferredGenres: [],
+      isLoggedIn: false
+    };
+    setUser(defaultUser);
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("cinematch_user");
+    }
+    setShowProfileModal(false);
+    showToast("Signed out successfully.");
   };
 
   // Filter and Sort Output
@@ -242,6 +310,108 @@ export default function Home() {
         <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 rounded-xl border border-red-600/50 bg-[#111111] text-white shadow-2xl animate-fade-in">
           <AlertCircle className="w-4 h-4 text-red-500" />
           <span className="text-xs font-bold">{toastMessage}</span>
+        </div>
+      )}
+
+      {/* User Login / Profile Modal */}
+      {showProfileModal && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-[#111111] border border-[#262626] rounded-3xl p-6 shadow-2xl flex flex-col gap-5 relative">
+            <button 
+              onClick={() => setShowProfileModal(false)}
+              className="absolute top-4 right-4 text-neutral-400 hover:text-white cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {user.isLoggedIn ? (
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center gap-3.5 pb-4 border-b border-[#222222]">
+                  <img 
+                    src={user.avatar || "https://avatars.githubusercontent.com/u/142834906?v=4"} 
+                    alt={user.name} 
+                    className="w-14 h-14 rounded-2xl object-cover border-2 border-red-600"
+                  />
+                  <div>
+                    <h3 className="text-lg font-black text-white">{user.name}</h3>
+                    <p className="text-xs text-neutral-400 font-medium">{user.email}</p>
+                    <span className="inline-block text-[10px] font-extrabold px-2 py-0.5 rounded bg-red-950/60 text-red-400 border border-red-900/40 mt-1">
+                      Member Active
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <h4 className="text-xs font-black text-neutral-400 uppercase tracking-wider">Your Taste Profile</h4>
+                  <div className="flex flex-wrap gap-1.5">
+                    {["Sci-Fi", "Psychological Thriller", "Drama", "Crime", "Mystery"].map(g => (
+                      <span key={g} className="text-xs font-bold px-2.5 py-1 rounded-lg bg-[#181818] border border-[#262626] text-neutral-200">
+                        {g}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="p-3.5 bg-[#161616] border border-[#242424] rounded-2xl flex items-center justify-between">
+                  <span className="text-xs font-bold text-neutral-300">Saved in Watchlist</span>
+                  <span className="text-xs font-black text-red-500">{watchlist.length} Movies</span>
+                </div>
+
+                <div className="flex items-center gap-2 pt-2">
+                  <button
+                    onClick={handleLogout}
+                    className="w-full py-2.5 rounded-xl text-xs font-extrabold bg-[#1a1a1a] hover:bg-red-950/50 hover:text-red-400 text-neutral-300 border border-[#2a2a2a] transition-all cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    Sign Out
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-4">
+                <div>
+                  <div className="w-10 h-10 rounded-2xl bg-[#e50914] flex items-center justify-center text-white shadow-lg shadow-red-600/30 mb-3">
+                    <User className="w-5 h-5" />
+                  </div>
+                  <h3 className="text-xl font-black text-white">Sign in to CineMatch</h3>
+                  <p className="text-xs text-neutral-400 mt-1">Save your favorite movies, track recommendations, and personalize your taste profile.</p>
+                </div>
+
+                <form onSubmit={handleLoginSubmit} className="space-y-3">
+                  <div>
+                    <label className="text-[11px] font-extrabold text-neutral-400 uppercase block mb-1">Your Name</label>
+                    <input 
+                      type="text"
+                      required
+                      placeholder="e.g. Kaustubh Tiwari"
+                      value={loginName}
+                      onChange={(e) => setLoginName(e.target.value)}
+                      className="w-full bg-[#181818] border border-[#262626] focus:border-red-600 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-extrabold text-neutral-400 uppercase block mb-1">Email Address</label>
+                    <input 
+                      type="email"
+                      placeholder="e.g. yourname@example.com"
+                      value={loginEmail}
+                      onChange={(e) => setLoginEmail(e.target.value)}
+                      className="w-full bg-[#181818] border border-[#262626] focus:border-red-600 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full py-3 rounded-xl text-xs font-black bg-[#e50914] hover:bg-red-700 text-white uppercase tracking-wider transition-all cursor-pointer shadow-lg shadow-red-600/30 flex items-center justify-center gap-2"
+                  >
+                    <LogIn className="w-4 h-4" />
+                    Continue
+                  </button>
+                </form>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -303,12 +473,12 @@ export default function Home() {
 
                 <div className="grid grid-cols-2 gap-2 text-[11px] text-neutral-400">
                   <div>
-                    <span className="font-bold text-neutral-500 block text-[9px] uppercase">Semantic Similarity</span>
+                    <span className="font-bold text-neutral-500 block text-[9px] uppercase">Match Score</span>
                     <span className="text-white font-extrabold">{Math.round((selectedMovie.similarity_score || 0.85) * 100)}%</span>
                   </div>
                   <div>
                     <span className="font-bold text-neutral-500 block text-[9px] uppercase">Director</span>
-                    <span className="text-white font-bold truncate block">{selectedMovie.director || "Christopher Nolan"}</span>
+                    <span className="text-white font-bold truncate block">{selectedMovie.director || "Acclaimed Director"}</span>
                   </div>
                 </div>
               </div>
@@ -334,22 +504,20 @@ export default function Home() {
       {/* TOP HEADER */}
       <header className="w-full bg-[#0a0a0a] border-b border-[#1f1f1f] sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+          
+          {/* Logo & Clean Subtitle */}
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-[#e50914] flex items-center justify-center shadow-lg shadow-red-600/30">
               <Flame className="w-5 h-5 text-white" />
             </div>
             <div>
               <span className="text-lg font-black tracking-tight text-white block leading-none">CineMatch</span>
-              <span className="text-[10px] text-red-500 font-bold uppercase tracking-widest">AI Semantic Discovery</span>
+              <span className="text-[11px] text-red-500 font-bold tracking-wide">Find your match</span>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#141414] border border-[#242424] text-xs font-bold text-neutral-300">
-              <Layers className="w-3.5 h-3.5 text-red-500" />
-              <span>250,000+ Movies (SQLite Embedded)</span>
-            </div>
-            
+          {/* Right Navigation & Profile Section */}
+          <div className="flex items-center gap-2.5">
             <button 
               onClick={() => showToast(`Watchlist has ${watchlist.length} saved movies.`)}
               className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-[#141414] border border-[#262626] text-xs font-extrabold text-neutral-300 hover:text-white hover:border-red-600 transition-all cursor-pointer"
@@ -357,29 +525,46 @@ export default function Home() {
               <Bookmark className="w-3.5 h-3.5 text-red-500" />
               <span>Watchlist ({watchlist.length})</span>
             </button>
+
+            {/* Profile / Sign In Button */}
+            <button 
+              onClick={() => setShowProfileModal(true)}
+              className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-[#141414] border border-[#262626] text-xs font-extrabold text-neutral-200 hover:text-white hover:border-red-600 transition-all cursor-pointer"
+            >
+              {user.isLoggedIn ? (
+                <>
+                  <img 
+                    src={user.avatar} 
+                    alt={user.name} 
+                    className="w-4 h-4 rounded-full object-cover"
+                  />
+                  <span className="hidden sm:inline">{user.name.split(" ")[0]}</span>
+                </>
+              ) : (
+                <>
+                  <User className="w-3.5 h-3.5 text-red-500" />
+                  <span>Sign In</span>
+                </>
+              )}
+            </button>
           </div>
         </div>
       </header>
 
-      {/* HERO & NATURAL LANGUAGE SEARCH AREA */}
-      <section className="w-full bg-gradient-to-b from-[#0e0e0e] via-[#070707] to-[#050505] border-b border-[#1c1c1c] py-12 px-4 sm:px-6">
+      {/* HERO & SEARCH AREA */}
+      <section className="w-full bg-gradient-to-b from-[#0e0e0e] via-[#070707] to-[#050505] border-b border-[#1c1c1c] py-14 px-4 sm:px-6">
         <div className="max-w-4xl mx-auto flex flex-col items-center text-center gap-4">
-          
-          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-red-950/40 border border-red-800/40 text-red-400 text-xs font-bold">
-            <Sparkles className="w-3.5 h-3.5" />
-            Powered by Sentence Transformers &amp; Google Gemini Intent
-          </div>
 
           <h1 className="text-3xl sm:text-5xl font-black text-white tracking-tight leading-tight">
             Describe Any Movie You Feel Like Watching.
           </h1>
 
           <p className="text-sm sm:text-base text-neutral-400 max-w-2xl font-medium leading-relaxed">
-            Tell CineMatch your exact mood, plot dynamic, or emotional craving in natural language. Our AI extracts your intent and performs semantic vector cosine similarity across our local movie dataset.
+            Tell CineMatch your mood, vibe, or favorite plot style in everyday words, and find the perfect movie to watch tonight.
           </p>
 
           {/* Search Input Box */}
-          <div className="w-full max-w-3xl mt-4">
+          <div className="w-full max-w-3xl mt-3">
             <form 
               onSubmit={(e) => { e.preventDefault(); handleSearch(); }}
               className="relative flex items-center bg-[#111111] border-2 border-[#262626] focus-within:border-red-600 rounded-2xl shadow-2xl transition-all p-2"
@@ -434,7 +619,7 @@ export default function Home() {
       {/* MAIN RESULTS SECTION */}
       <main ref={resultsRef} className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 py-8 w-full flex flex-col gap-6">
         
-        {/* Loading State with 2-Stage Messages */}
+        {/* Loading State */}
         {isLoading && (
           <div className="bg-[#111111] border border-[#222222] rounded-3xl p-12 flex flex-col items-center justify-center gap-4 text-center">
             <div className="relative">
@@ -443,12 +628,12 @@ export default function Home() {
             </div>
             <div>
               <h3 className="text-lg font-black text-white">
-                {loadingStep === "intent" && "Understanding your movie taste with Gemini AI..."}
-                {loadingStep === "embedding" && "Generating semantic sentence embeddings..."}
-                {loadingStep === "ranking" && "Ranking matches via vector cosine similarity..."}
+                {loadingStep === "intent" && "Understanding your movie taste..."}
+                {loadingStep === "embedding" && "Searching through movie catalog..."}
+                {loadingStep === "ranking" && "Finding your best matches..."}
               </h3>
               <p className="text-xs text-neutral-400 mt-1 font-medium">
-                Scanning local movie metadata and computing vector dot products...
+                Filtering across genres, mood, and ratings...
               </p>
             </div>
           </div>
@@ -458,28 +643,7 @@ export default function Home() {
         {!isLoading && recommendations.length > 0 && (
           <div className="flex flex-col gap-4">
             
-            {/* Context Summary Banner */}
-            {enhancedQuery && (
-              <div className="bg-[#111111] border border-[#222222] p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-red-950/60 border border-red-900/40 flex items-center justify-center text-red-500 shrink-0">
-                    <Sparkles className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-black text-red-500 uppercase tracking-widest block">Active Search Context</span>
-                    <p className="text-xs font-bold text-white leading-tight">"{enhancedQuery}"</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-xs font-extrabold px-3 py-1 rounded-lg bg-[#181818] text-neutral-300 border border-[#262626]">
-                    {filteredRecs.length} Matches Found
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* Filter Pills Bar */}
+            {/* Filter Bar */}
             <div className="bg-[#0f0f0f] border border-[#1f1f1f] p-3 rounded-2xl flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className="text-xs font-extrabold text-neutral-500 mr-2 flex items-center gap-1">
@@ -508,7 +672,7 @@ export default function Home() {
                     onChange={(e) => setSortBy(e.target.value as any)}
                     className="bg-[#181818] border border-[#262626] text-white text-xs font-bold rounded-lg px-2.5 py-1 outline-none cursor-pointer"
                   >
-                    <option value="similarity">Semantic Match</option>
+                    <option value="similarity">Top Match</option>
                     <option value="rating">IMDb Rating</option>
                     <option value="year">Release Year</option>
                   </select>
@@ -547,7 +711,7 @@ export default function Home() {
                           <span>{movie.rating}</span>
                         </div>
 
-                        {/* Semantic Match Percentage */}
+                        {/* Match Percentage */}
                         <div className="absolute bottom-3 right-3 bg-red-950/80 border border-red-900/60 text-red-200 text-[10px] font-black px-2 py-0.5 rounded">
                           {Math.round((movie.similarity_score || 0.85) * 100)}% Match
                         </div>
@@ -607,11 +771,13 @@ export default function Home() {
       <footer className="w-full bg-[#080808] border-t border-[#1a1a1a] py-8 px-4 text-center text-xs font-bold text-neutral-500">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <Flame className="w-4 h-4 text-red-500" />
-            <span className="text-white font-extrabold">CineMatch</span>
-            <span>— Self-Contained AI Movie Recommendation Engine (No DB)</span>
+            <div className="w-6 h-6 rounded-lg bg-[#e50914] flex items-center justify-center text-white">
+              <Flame className="w-3.5 h-3.5" />
+            </div>
+            <span className="text-white font-extrabold text-sm">CineMatch</span>
+            <span className="text-neutral-400 font-medium">— Find your match</span>
           </div>
-          <p>© 2026 Kaustubh Tiwari. Built with Sentence Transformers &amp; Google Gemini.</p>
+          <p className="text-neutral-500">© 2026 Kaustubh Tiwari. All rights reserved.</p>
         </div>
       </footer>
 
