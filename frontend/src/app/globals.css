@@ -1,0 +1,65 @@
+@import "tailwindcss";
+
+:root {
+  --background: #000000;
+  --foreground: #f8fafc;
+  --card-bg: rgba(12, 12, 12, 0.85);
+  --border-color: rgba(239, 68, 68, 0.18);
+  --accent-glow: radial-gradient(circle, rgba(220, 38, 38, 0.2) 0%, transparent 65%);
+}
+
+body {
+  background: #000000;
+  color: var(--foreground);
+  font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+  overflow-x: hidden;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #000000;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(220, 38, 38, 0.45);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(239, 68, 68, 0.85);
+}
+
+/* Glassmorphism utility with solid dark aesthetic & red accents */
+.glass-panel {
+  background: var(--card-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-color);
+}
+
+/* Custom glow effects */
+.glow-spot {
+  position: absolute;
+  width: 450px;
+  height: 450px;
+  background: var(--accent-glow);
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* Animations */
+@keyframes pulseGlow {
+  0%, 100% {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+}
+
+.pulsing-glow {
+  animation: pulseGlow 7s infinite ease-in-out;
+}

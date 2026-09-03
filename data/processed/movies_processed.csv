@@ -1,0 +1,5 @@
+movieId,title,genres,combined_text,user_tags,cleaned_genres
+1,Toy Story,Animation|Children,toy story animation children pixar fun,pixar fun,animation children
+2,Jumanji,Adventure|Fantasy,jumanji adventure fantasy,,adventure fantasy
+3,Heat,Action|Crime,heat action crime,,action crime
+4,Star Wars,Action|Sci-Fi,star wars action sci-fi,,action sci-fi
