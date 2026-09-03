@@ -4,8 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { 
   Film, Sparkles, Search, Star, MessageSquare, Send, Info, Bookmark, User, 
   RefreshCw, AlertCircle, Check, X, Flame, Key, SlidersHorizontal, ArrowRight,
-  ExternalLink, Layers, Play, Clock, Heart, Filter, ChevronRight, LogIn, LogOut,
-  UserCircle, Settings, Shield
+  ExternalLink, Layers, Play, Clock, Heart, Filter, ChevronRight, LogIn, LogOut
 } from "lucide-react";
 import { MOCK_MOVIES } from "@/data/movies";
 
@@ -50,6 +49,7 @@ const LOCAL_POSTER_MAP: Record<string, string> = {
   "Blade Runner 2049": "https://image.tmdb.org/t/p/w500/gajva2L0rPYkEWjzgFlBXCAVBE5.jpg",
   "Arrival": "https://image.tmdb.org/t/p/w500/x2O0O229ITx6igAgiT6J9N8vvNk.jpg",
   "Dune: Part Two": "https://image.tmdb.org/t/p/w500/1pdfLvkbY9ohJlCjQH2CZjjYVvJ.jpg",
+  "Dune: Part One": "https://image.tmdb.org/t/p/w500/d5NXSklXo0qyIYkgV94XAgMIckC.jpg",
   "Eternal Sunshine of the Spotless Mind": "https://image.tmdb.org/t/p/w500/5MwkWH9tYHv3mV9OdYTMR5qreIz.jpg",
   "Her": "https://image.tmdb.org/t/p/w500/yk4J4aC059v9LtNV9Fd01fMh9ne.jpg",
   "The Prestige": "https://image.tmdb.org/t/p/w500/tRNlZbgNCNOpLpbPEz5L8G8A0JN.jpg",
@@ -63,8 +63,11 @@ const LOCAL_POSTER_MAP: Record<string, string> = {
   "Parasite": "https://image.tmdb.org/t/p/w500/7IiTTgloJzvGI1TAYymCfbfl3vT.jpg",
   "Gone Girl": "https://image.tmdb.org/t/p/w500/qymaJhucquUwjpb8DYBPynqTk5L.jpg",
   "Prisoners": "https://image.tmdb.org/t/p/w500/tuZhZ6biFMr5n9Y2hX0yE0F1E2K.jpg",
+  "Zodiac": "https://image.tmdb.org/t/p/w500/6iyTf9E6zP45V1zH1W9s6t9yC1G.jpg",
+  "Memento": "https://image.tmdb.org/t/p/w500/yuNs09hvpHVU1cBTCAk9z9Sp2D.jpg",
   "The Dark Knight": "https://image.tmdb.org/t/p/w500/qJ2tW6WMUDux911r6m7haRef0WH.jpg",
   "The Godfather": "https://image.tmdb.org/t/p/w500/3bhkrj58Vtu7enYsRolD1fZdja1.jpg",
+  "The Godfather Part II": "https://image.tmdb.org/t/p/w500/hek3koDUyMrk7g57ImF81395xG.jpg",
   "Pulp Fiction": "https://image.tmdb.org/t/p/w500/d5iIlFnGhFvl09Y77bK75T09xsm.jpg",
   "Goodfellas": "https://image.tmdb.org/t/p/w500/aKuFiU82s5ISJpGZZ79RuvX7hIe.jpg",
   "Mad Max: Fury Road": "https://image.tmdb.org/t/p/w500/8tZYtuWezp8JbcsvHYO0O46tFbo.jpg",
@@ -78,20 +81,77 @@ const LOCAL_POSTER_MAP: Record<string, string> = {
   "Spirited Away": "https://image.tmdb.org/t/p/w500/393rA7P0qDzoE97WsNn16Vv4vP.jpg",
   "Your Name": "https://image.tmdb.org/t/p/w500/q719qXXEzOoYaps6XZawPWhNUm7.jpg",
   "Spider-Man: Into the Spider-Verse": "https://image.tmdb.org/t/p/w500/iiZZdoQBEYBv6id8su7ImL0oCbD.jpg",
-  "The Shawshank Redemption": "https://image.tmdb.org/t/p/w500/q6y0Go1tsGEsmtFryDOJo3dEmqu.jpg"
+  "Spider-Man: Across the Spider-Verse": "https://image.tmdb.org/t/p/w500/8Vt6mWEReuy4Of61Lnj5Xj704m8.jpg",
+  "The Shawshank Redemption": "https://image.tmdb.org/t/p/w500/q6y0Go1tsGEsmtFryDOJo3dEmqu.jpg",
+  "The Lord of the Rings: The Fellowship of the Ring": "https://image.tmdb.org/t/p/w500/6oom5QYQ2yQTMJIbnvbkBL9cDK6.jpg"
 };
 
+// Initial default recommendations generated from curated movies
+function computeInitialRecommendations(prompt: string): MovieRecommendation[] {
+  const pLower = prompt.toLowerCase();
+  
+  const scored = MOCK_MOVIES.map((movie) => {
+    const cleanTitle = movie.title.split(" (")[0];
+    const mText = `${movie.title} ${movie.genres.replace(/\|/g, " ")}`.toLowerCase();
+    const genreList = movie.genres.split("|");
+    
+    let simScore = 0.50;
+    const keywords = pLower.split(/\s+/).filter(w => w.length > 3);
+    let matchedKw = 0;
+    keywords.forEach(kw => {
+      if (mText.includes(kw)) matchedKw++;
+    });
+    simScore += Math.min(0.40, matchedKw * 0.15);
+
+    if (pLower.includes("sci-fi") && movie.genres.includes("Sci-Fi")) simScore += 0.25;
+    if (pLower.includes("thrill") && movie.genres.includes("Thriller")) simScore += 0.25;
+    if (pLower.includes("drama") && movie.genres.includes("Drama")) simScore += 0.15;
+    if (pLower.includes("action") && movie.genres.includes("Action")) simScore += 0.20;
+    if (pLower.includes("comedy") && movie.genres.includes("Comedy")) simScore += 0.30;
+    if (pLower.includes("horror") && movie.genres.includes("Horror")) simScore += 0.30;
+    if (pLower.includes("romance") && movie.genres.includes("Romance")) simScore += 0.25;
+    if (pLower.includes("interstellar") && movie.title.includes("Interstellar")) simScore += 0.40;
+    if (pLower.includes("inception") && movie.title.includes("Inception")) simScore += 0.40;
+
+    const poster = LOCAL_POSTER_MAP[cleanTitle] || `https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=500&auto=format&fit=crop&q=60`;
+    const rawRating = movie.rating || 4.5;
+    const normRating = rawRating / 5.0;
+    const finalScore = 0.80 * Math.min(1.0, simScore) + 0.20 * normRating;
+
+    return {
+      rank: 1,
+      id: movie.movieId,
+      title: cleanTitle,
+      year: parseInt(movie.title.match(/\((\d{4})\)/)?.[1] || "2020"),
+      genres: genreList,
+      overview: `An acclaimed ${genreList.join(", ")} cinematic masterpiece featuring gripping storytelling, depth, and striking cinematography.`,
+      rating: Math.round(rawRating * 2 * 10) / 10,
+      vote_count: 850000,
+      director: "Acclaimed Director",
+      poster_path: poster,
+      similarity_score: Math.round(Math.min(0.98, simScore) * 100) / 100,
+      final_score: Math.round(Math.min(0.99, finalScore) * 100) / 100,
+      match_reason: `Strong match for your request with ${genreList[0]} storytelling and resonant character themes.`
+    };
+  });
+
+  return scored
+    .sort((a, b) => (b.final_score || b.similarity_score) - (a.final_score || a.similarity_score))
+    .slice(0, 12)
+    .map((item, rIdx) => ({ ...item, rank: rIdx + 1 }));
+}
+
 export default function Home() {
-  const [searchPrompt, setSearchPrompt] = useState("");
-  const [recommendations, setRecommendations] = useState<MovieRecommendation[]>([]);
-  const [enhancedQuery, setEnhancedQuery] = useState<string>("");
+  const [searchPrompt, setSearchPrompt] = useState("Mind-bending sci-fi with emotional themes and space exploration");
+  const [recommendations, setRecommendations] = useState<MovieRecommendation[]>(() => 
+    computeInitialRecommendations("Mind-bending sci-fi with emotional themes and space exploration")
+  );
+  const [enhancedQuery, setEnhancedQuery] = useState<string>("Mind-bending sci-fi with emotional themes and space exploration");
   
   // Loading & Modals
   const [isLoading, setIsLoading] = useState(false);
-  const [loadingStep, setLoadingStep] = useState<"intent" | "embedding" | "ranking">("intent");
   const [selectedMovie, setSelectedMovie] = useState<MovieRecommendation | null>(null);
   const [showProfileModal, setShowProfileModal] = useState<boolean>(false);
-  const [showWatchlistModal, setShowWatchlistModal] = useState<boolean>(false);
   const [watchlist, setWatchlist] = useState<number[]>([]);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -107,7 +167,6 @@ export default function Home() {
   const [loginName, setLoginName] = useState("");
 
   // Filters
-  const [minRating, setMinRating] = useState<number>(0.0);
   const [selectedGenre, setSelectedGenre] = useState<string>("All");
   const [sortBy, setSortBy] = useState<"similarity" | "rating" | "year">("similarity");
 
@@ -136,23 +195,17 @@ export default function Home() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // Perform Initial Default Recommendation
-  useEffect(() => {
-    handleSearch("Mind-bending sci-fi with emotional themes and space exploration");
-  }, []);
-
   const handleSearch = async (queryText?: string) => {
     const prompt = (queryText || searchPrompt).trim();
     if (!prompt) return;
 
+    if (queryText) {
+      setSearchPrompt(queryText);
+    }
+
     setIsLoading(true);
-    setLoadingStep("intent");
-    setEnhancedQuery("");
 
     try {
-      setTimeout(() => setLoadingStep("embedding"), 350);
-
-      // Attempt FastAPI call first
       let apiSuccess = false;
       try {
         const res = await fetch("http://localhost:8000/recommend", {
@@ -163,78 +216,23 @@ export default function Home() {
 
         if (res.ok) {
           const data = await res.json();
-          if (data.success && data.recommendations) {
+          if (data.success && data.recommendations && data.recommendations.length > 0) {
             setRecommendations(data.recommendations);
             setEnhancedQuery(data.enhanced_query || prompt);
             apiSuccess = true;
           }
         }
       } catch (err) {
-        // FastAPI offline; fallback to local semantic match
+        // FastAPI local backend not active; compute client-side semantic match
       }
 
-      // Resilient Local Semantic ML Match
       if (!apiSuccess) {
-        setTimeout(() => setLoadingStep("ranking"), 700);
-
         setTimeout(() => {
-          const pLower = prompt.toLowerCase();
-          
-          const scored = MOCK_MOVIES.map((movie) => {
-            const mText = `${movie.title} ${movie.genres.replace(/\|/g, " ")}`.toLowerCase();
-            const genreList = movie.genres.split("|");
-            
-            let simScore = 0.45;
-            const keywords = pLower.split(/\s+/).filter(w => w.length > 3);
-            let matchedKw = 0;
-            keywords.forEach(kw => {
-              if (mText.includes(kw)) matchedKw++;
-            });
-            simScore += Math.min(0.40, matchedKw * 0.15);
-
-            if (pLower.includes("sci-fi") && movie.genres.includes("Sci-Fi")) simScore += 0.25;
-            if (pLower.includes("thrill") && movie.genres.includes("Thriller")) simScore += 0.25;
-            if (pLower.includes("drama") && movie.genres.includes("Drama")) simScore += 0.15;
-            if (pLower.includes("action") && movie.genres.includes("Action")) simScore += 0.20;
-            if (pLower.includes("comedy") && movie.genres.includes("Comedy")) simScore += 0.30;
-            if (pLower.includes("horror") && movie.genres.includes("Horror")) simScore += 0.30;
-            if (pLower.includes("romance") && movie.genres.includes("Romance")) simScore += 0.25;
-            if (pLower.includes("interstellar") && movie.title.includes("Interstellar")) simScore += 0.40;
-            if (pLower.includes("inception") && movie.title.includes("Inception")) simScore += 0.40;
-
-            const cleanTitle = movie.title.split(" (")[0];
-            const poster = LOCAL_POSTER_MAP[cleanTitle] || `https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=500&auto=format&fit=crop&q=60`;
-            
-            const rawRating = movie.rating || 4.5;
-            const normRating = rawRating / 5.0;
-            const finalScore = 0.80 * Math.min(1.0, simScore) + 0.20 * normRating;
-
-            return {
-              rank: 1,
-              id: movie.movieId,
-              title: cleanTitle,
-              year: parseInt(movie.title.match(/\((\d{4})\)/)?.[1] || "2020"),
-              genres: genreList,
-              overview: `An acclaimed ${genreList.join(", ")} story featuring deep thematic tension, character depth, and striking cinematography.`,
-              rating: Math.round(rawRating * 2 * 10) / 10,
-              vote_count: 850000,
-              director: "Acclaimed Director",
-              poster_path: poster,
-              similarity_score: Math.round(Math.min(0.98, simScore) * 100) / 100,
-              final_score: Math.round(Math.min(0.99, finalScore) * 100) / 100,
-              match_reason: `Strong match for your request with ${genreList[0]} storytelling and resonant character themes.`
-            };
-          });
-
-          const ranked = scored
-            .sort((a, b) => (b.final_score || b.similarity_score) - (a.final_score || a.similarity_score))
-            .slice(0, 12)
-            .map((item, rIdx) => ({ ...item, rank: rIdx + 1 }));
-
+          const ranked = computeInitialRecommendations(prompt);
           setRecommendations(ranked);
           setEnhancedQuery(prompt);
           setIsLoading(false);
-        }, 800);
+        }, 400);
       } else {
         setIsLoading(false);
       }
@@ -294,7 +292,6 @@ export default function Home() {
 
   // Filter and Sort Output
   const filteredRecs = recommendations
-    .filter(m => (m.rating || 8.0) >= minRating * 2)
     .filter(m => selectedGenre === "All" || m.genres.some(g => g.toLowerCase().includes(selectedGenre.toLowerCase())))
     .sort((a, b) => {
       if (sortBy === "rating") return b.rating - a.rating;
@@ -505,7 +502,7 @@ export default function Home() {
       <header className="w-full bg-[#0a0a0a] border-b border-[#1f1f1f] sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           
-          {/* Logo & Clean Subtitle */}
+          {/* Logo & Subtitle */}
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-[#e50914] flex items-center justify-center shadow-lg shadow-red-600/30">
               <Flame className="w-5 h-5 text-white" />
@@ -516,7 +513,7 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Right Navigation & Profile Section */}
+          {/* Right Navigation */}
           <div className="flex items-center gap-2.5">
             <button 
               onClick={() => showToast(`Watchlist has ${watchlist.length} saved movies.`)}
@@ -602,7 +599,6 @@ export default function Home() {
                 <button
                   key={idx}
                   onClick={() => {
-                    setSearchPrompt(chip);
                     handleSearch(chip);
                   }}
                   className="text-xs font-bold px-3 py-1.5 rounded-xl bg-[#141414] hover:bg-[#1f1f1f] border border-[#242424] hover:border-red-600 text-neutral-300 hover:text-white transition-all cursor-pointer text-left"
@@ -627,20 +623,14 @@ export default function Home() {
               <Flame className="w-7 h-7 text-red-500 absolute inset-0 m-auto animate-pulse" />
             </div>
             <div>
-              <h3 className="text-lg font-black text-white">
-                {loadingStep === "intent" && "Understanding your movie taste..."}
-                {loadingStep === "embedding" && "Searching through movie catalog..."}
-                {loadingStep === "ranking" && "Finding your best matches..."}
-              </h3>
-              <p className="text-xs text-neutral-400 mt-1 font-medium">
-                Filtering across genres, mood, and ratings...
-              </p>
+              <h3 className="text-lg font-black text-white">Finding your best matches...</h3>
+              <p className="text-xs text-neutral-400 mt-1 font-medium">Analyzing plot dynamics, mood, and ratings...</p>
             </div>
           </div>
         )}
 
         {/* Results Header & Filter Bar */}
-        {!isLoading && recommendations.length > 0 && (
+        {!isLoading && filteredRecs.length > 0 && (
           <div className="flex flex-col gap-4">
             
             {/* Filter Bar */}
