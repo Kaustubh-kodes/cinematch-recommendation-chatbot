@@ -347,7 +347,7 @@ export default function Home() {
           <div className="flex items-center gap-3">
             <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#141414] border border-[#242424] text-xs font-bold text-neutral-300">
               <Layers className="w-3.5 h-3.5 text-red-500" />
-              <span>Local ML Dataset (No DB)</span>
+              <span>250,000+ Movies (SQLite Embedded)</span>
             </div>
             
             <button 
