@@ -1,6 +1,9 @@
-# CineMatch — AI-Powered Semantic Movie Recommendation Engine
+# CineMatch — Find your match
 
-> **A self-contained, intelligent natural language movie discovery platform powered by Sentence Transformers, Vectorized Cosine Similarity, and Google Gemini Intent Enhancement. Zero database dependency.**
+> **An AI-powered semantic movie recommendation platform powered by Sentence Transformers, Vectorized Cosine Similarity, and Google Gemini Intent Understanding across a 250,000+ movie catalog. Zero cloud database dependency.**
+
+🌐 **Live Demo:** [https://kaustubh-kodes.github.io/cinematch-recommendation-chatbot/](https://kaustubh-kodes.github.io/cinematch-recommendation-chatbot/)  
+📂 **GitHub Repository:** [https://github.com/Kaustubh-kodes/cinematch-recommendation-chatbot](https://github.com/Kaustubh-kodes/cinematch-recommendation-chatbot)
 
 ---
 
@@ -13,16 +16,16 @@ Traditional movie recommenders rely on rigid genre dropdowns or keyword filters 
 * *"I want a funny feel-good movie to watch with my friends"*
 * *"I want a slow emotional movie about loneliness and relationships"*
 
-CineMatch analyzes the emotional tone, themes, pacing, and narrative tropes of the prompt, extracts the user's underlying intent, and performs **semantic vector similarity search** across a **local movie dataset** to return ranked, grounded recommendations with factual **"Why this matches"** explanations.
+CineMatch analyzes the emotional tone, themes, pacing, and narrative tropes of your prompt, extracts underlying intent via **Google Gemini**, and performs **semantic vector similarity search** across a **250,000+ movie catalog** to return ranked, grounded recommendations with factual **"Why this matches"** explanations.
 
 ---
 
-## 🏛️ 2. Architectural Design: Strict Self-Contained Architecture (NO Database)
+## 🏛️ 2. Architecture: Zero Cloud Database / 100% Embedded
 
-CineMatch is intentionally built with **zero external database dependencies**:
+CineMatch is built to be completely self-contained with **zero external cloud database servers**:
 * ❌ **NO** MongoDB / PostgreSQL / MySQL / Firebase
 * ❌ **NO** Pinecone / ChromaDB / Weaviate / LangChain
-* ✅ **100% Local Files**: Dataset stored in `data/movies.csv`, vector embeddings stored in `models/movie_embeddings.npy`.
+* ✅ **100% Embedded & Local**: 250,000+ movie records stored in a single SQLite file (`data/movies.db`), vector embeddings in `models/movie_embeddings.npy`.
 
 ### End-to-End Execution Flow
 
@@ -34,10 +37,10 @@ USER NATURAL LANGUAGE PROMPT
 ENHANCED SEMANTIC SEARCH QUERY
            ↓
 [Sentence Transformer: all-MiniLM-L6-v2]
-           ↓  (Encodes into dense 384-dimensional unit vector)
+           ↓  (Encodes query into dense 384-dimensional unit vector)
 VECTORIZED COSINE SIMILARITY (NumPy Dot Product)
            ↓  (Calculates dot product against models/movie_embeddings.npy)
-SCORE BLENDING & RATING WEIGHTING
+SQL MULTI-ATTRIBUTE QUERYING & SCORING (250,000+ Movies)
            ↓  (80% Semantic Similarity + 12% Normalized Rating + 8% Popularity)
 GROUNDED MATCH REASON GENERATION
            ↓  (Generates factual explanation using local metadata)
@@ -49,12 +52,12 @@ FASTAPI BACKEND → REACT / NEXT.JS FRONTEND
 ## 🧠 3. How the ML Recommendation Engine Works
 
 1. **Pre-trained Sentence Transformer**: Uses `all-MiniLM-L6-v2`, mapping sentences to a 384-dimensional dense vector space tuned for semantic search.
-2. **Offline Embeddings Generation**: Metadata (`title`, `genres`, `overview`, `keywords`, `cast`, `director`) is concatenated into a rich `combined_text` string and pre-encoded into `models/movie_embeddings.npy`.
+2. **Offline Embeddings Generation**: Metadata (`title`, `genres`, `overview`, `keywords`, `cast`, `director`) is concatenated into an information-dense string and pre-encoded into `models/movie_embeddings.npy`.
 3. **High-Performance Vectorized Search**: Embeddings are L2-normalized so cosine similarity is computed in milliseconds via a single NumPy matrix-vector dot product:
-   $$	ext{Cosine Similarity}(\mathbf{u}, \mathbf{v}) = \mathbf{u} \cdot \mathbf{v}$$
+   $$\text{Cosine Similarity}(\mathbf{u}, \mathbf{v}) = \mathbf{u} \cdot \mathbf{v}$$
 4. **Intelligent Score Blending**:
-   $$	ext{Final Score} = 0.80 	imes 	ext{Similarity} + 0.12 	imes 	ext{Rating}_{	ext{norm}} + 0.08 	imes 	ext{Votes}_{	ext{norm}}$$
-   This ensures semantic match is the dominant factor while preventing low-quality films from ranking first.
+   $$\text{Final Score} = 0.80 \times \text{Similarity} + 0.12 \times \text{Rating}_{\text{norm}} + 0.08 \times \text{Votes}_{\text{norm}}$$
+   This ensures semantic match is the dominant factor while prioritizing critically acclaimed cinema.
 
 ---
 
@@ -84,7 +87,7 @@ Gemini is strictly used as an **Intent Understanding and Query Enhancement layer
 
 ---
 
-## 🛡️ 5. Graceful Fallback System
+## 🛡️ 5. Graceful Offline Fallback
 
 If the Gemini API key is missing, network is unavailable, or rate limits occur:
 1. CineMatch **never crashes**.
@@ -98,22 +101,24 @@ If the Gemini API key is missing, network is unavailable, or rate limits occur:
 ```
 cinematch/
 ├── data/
-│   └── movies.csv                 # Local movie dataset with rich metadata
+│   ├── movies.db                  # Embedded SQLite database (250,000+ movies)
+│   └── movies.csv                 # Local curated CSV metadata
 ├── models/
 │   └── movie_embeddings.npy       # Precomputed 384d float32 embeddings
 ├── backend/
-│   ├── main.py                    # FastAPI application & endpoints
-│   ├── recommender.py             # ML SentenceTransformer cosine similarity engine
+│   ├── main.py                    # FastAPI application & endpoints (GET /, POST /recommend)
+│   ├── recommender.py             # Hybrid SentenceTransformer + SQLite engine
 │   ├── gemini_service.py          # Gemini intent understanding & query enhancer
 │   ├── requirements.txt           # Backend dependencies
 │   └── .env.example               # Environment variables template
 ├── scripts/
+│   ├── ingest_250k_movies.py      # Streams and ingests 250,000+ movies into SQLite
 │   ├── prepare_data.py            # Prepares local movies.csv dataset
-│   └── generate_embeddings.py     # Generates and saves movie_embeddings.npy
-├── frontend/                      # Polished Next.js / React UI
-│   ├── src/app/page.tsx           # Natural language search UI & cards
+│   └── generate_embeddings.py     # Generates and saves movie_embeddings.npy offline
+├── frontend/                      # Modern Next.js / React UI
+│   ├── src/app/page.tsx           # Search UI, movie cards, user profile, watchlist
 │   └── next.config.ts             # Export configuration
-├── README.md                      # Comprehensive documentation
+├── README.md                      # Documentation
 └── requirements.txt               # Root dependencies
 ```
 
@@ -125,54 +130,52 @@ cinematch/
 * Python 3.10+
 * Node.js 18+ and npm
 
-### Step 1: Clone and Set Up Environment
+### Step 1: Install Dependencies
 ```bash
-cd cinematch
+git clone https://github.com/Kaustubh-kodes/cinematch-recommendation-chatbot.git
+cd cinematch-recommendation-chatbot
 
 # Install Python dependencies
 pip install -r requirements.txt
 ```
 
-### Step 2: Configure Gemini API Key (Optional but Recommended)
-Get your free API key at [Google AI Studio](https://aistudio.google.com/):
+### Step 2: Ingest 250,000+ Movies & Precompute Embeddings
 ```bash
-# Create .env from template
-cp .env.example .env
+# 1. Download official IMDb stream and build SQLite database (takes ~15 seconds)
+python scripts/ingest_250k_movies.py
 
-# Set your key in .env
-GEMINI_API_KEY="AIzaSyYourKeyHere"
-```
-
-### Step 3: Prepare Dataset and Generate Embeddings
-```bash
-# 1. Generate local movies.csv
-python scripts/prepare_data.py
-
-# 2. Compute and save models/movie_embeddings.npy (runs once)
+# 2. Generate curated local vector embeddings (runs once)
 python scripts/generate_embeddings.py
 ```
 
-### Step 4: Start the FastAPI Backend
+### Step 3: Configure Gemini API Key (Optional)
 ```bash
+cp .env.example .env
+# Add your key to .env:
+# GEMINI_API_KEY="AIzaSy..."
+```
+
+### Step 4: Start the Backend & Frontend
+```bash
+# Terminal 1: Start FastAPI Backend
 cd backend
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-```
-API Documentation will be live at: `http://localhost:8000/docs`
 
-### Step 5: Start the Frontend
-```bash
+# Terminal 2: Start Next.js Frontend
 cd ../frontend
 npm install
 npm run dev
 ```
-Open your browser at: `http://localhost:3000`
+
+* Frontend: `http://localhost:3000`
+* Backend API Docs: `http://localhost:8000/docs`
 
 ---
 
 ## 📡 8. API Reference
 
 ### `GET /`
-Returns backend status, loaded dataset count, and ML model details.
+Returns backend health, loaded dataset count (`250,000+`), and ML model status.
 
 ### `POST /recommend`
 Submits a natural language prompt and returns ranked movie matches.
@@ -208,7 +211,7 @@ Submits a natural language prompt and returns ranked movie matches.
       "poster_path": "https://image.tmdb.org/t/p/w500/kve20tXwUZpu4GUX8l6X7Z4QIIL.jpg",
       "similarity_score": 0.92,
       "final_score": 0.94,
-      "match_reason": "Strong match for your request with Thriller storytelling and a dark tone directed by Martin Scorsese."
+      "match_reason": "Strong match for your request with Thriller narrative, a dark tone and themes of mind games."
     }
   ],
   "total_results": 1
@@ -218,4 +221,4 @@ Submits a natural language prompt and returns ranked movie matches.
 ---
 
 ## 📜 9. License & Credits
-Developed by **Kaustubh Tiwari** as part of the CineMatch AI initiative.
+Developed by **Kaustubh Tiwari** as part of the CineMatch AI project.
