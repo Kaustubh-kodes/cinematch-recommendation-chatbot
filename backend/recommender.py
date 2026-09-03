@@ -69,7 +69,6 @@ class MovieRecommender:
                 norms = np.linalg.norm(self.curated_embeddings, axis=1, keepdims=True)
                 norms[norms == 0] = 1.0
                 self.curated_embeddings = self.curated_embeddings / norms
-                logger.info(f"Loaded curated embeddings matrix: {self.curated_embeddings.shape}")
 
             self.is_loaded = True
             logger.info("[INITIALIZED] CineMatch 250k Recommender ready.")
@@ -96,9 +95,9 @@ class MovieRecommender:
         reason_str = " and ".join(attributes[:2])
         return f"Strong match for your request with {primary_genre} narrative, {reason_str}."
 
-    def recommend(self, prompt: str, limit: int = 10, intent: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    def recommend(self, prompt: str, limit: int = 12, intent: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """
-        Executes hybrid semantic vector search and SQLite querying over 250,000+ movies.
+        Executes hybrid semantic vector search and dynamic SQLite querying across 250,000+ movies.
         """
         if not self.is_loaded or self.model is None:
             raise RuntimeError("Recommendation engine is not initialized.")
@@ -110,104 +109,86 @@ class MovieRecommender:
         results = []
         seen_titles = set()
 
-        # 1. Semantic Vector Match against Curated Core
-        if self.curated_embeddings is not None and self.curated_df is not None:
-            query_vec = self.model.encode(search_query, normalize_embeddings=True).astype(np.float32)
-            cosine_sims = np.dot(self.curated_embeddings, query_vec)
-
-            ratings = self.curated_df["rating"].fillna(7.0).to_numpy()
-            norm_ratings = np.clip((ratings - 5.0) / 5.0, 0.0, 1.0)
-            final_scores = 0.80 * cosine_sims + 0.20 * norm_ratings
-
-            top_curated_idx = np.argsort(final_scores)[::-1][:limit]
-            for idx in top_curated_idx:
-                row = self.curated_df.iloc[idx]
-                title = str(row.get("title", ""))
-                seen_titles.add(title.lower())
-                
-                genres_list = [g.strip() for g in str(row.get("genres", "")).split(",") if g.strip()]
-                match_reason = self.generate_match_reason(
-                    title=title,
-                    genres=str(row.get("genres", "")),
-                    year=int(row.get("year", 2020)),
-                    rating=float(row.get("rating", 7.5)),
-                    intent=intent
-                )
-
-                results.append({
-                    "rank": len(results) + 1,
-                    "id": int(row.get("id", idx + 1)),
-                    "title": title,
-                    "year": int(row.get("year", 2024)),
-                    "genres": genres_list,
-                    "overview": str(row.get("overview", "")),
-                    "rating": float(row.get("rating", 7.5)),
-                    "vote_count": int(row.get("vote_count", 500000)),
-                    "director": str(row.get("director", "Acclaimed Director")),
-                    "poster_path": str(row.get("poster_path", "")),
-                    "similarity_score": round(float(cosine_sims[idx]), 2),
-                    "final_score": round(float(final_scores[idx]), 2),
-                    "match_reason": match_reason
-                })
-
-        # 2. Query SQLite 250,000+ Database for additional grounded candidates
-        if len(results) < limit and os.path.exists(DB_PATH):
+        # 1. Query SQLite 250,000+ Movie Database with multi-attribute filtering & scoring
+        if os.path.exists(DB_PATH):
             try:
                 conn = self.get_db_connection()
                 cursor = conn.cursor()
                 
-                target_genre = ""
+                # Extract search keywords and genre hints
+                p_lower = prompt.lower()
+                target_genres = []
+                for g in ["Sci-Fi", "Action", "Thriller", "Horror", "Comedy", "Drama", "Romance", "Crime", "Animation", "Mystery", "Adventure", "Fantasy"]:
+                    if g.lower() in p_lower:
+                        target_genres.append(g)
                 if intent and intent.get("genres"):
-                    target_genre = intent["genres"][0]
-                
-                sql = """
-                SELECT id, title, year, runtime, genres, rating, vote_count, overview, poster_path 
-                FROM movies 
-                WHERE vote_count > 5000 AND rating >= 7.0
-                """
+                    for g in intent["genres"]:
+                        if g not in target_genres:
+                            target_genres.append(g)
+
+                sql = "SELECT id, title, year, runtime, genres, rating, vote_count, overview, poster_path FROM movies WHERE vote_count >= 1000"
                 params = []
-                if target_genre:
-                    sql += " AND genres LIKE ?"
-                    params.append(f"%{target_genre}%")
-                    
-                sql += " ORDER BY rating DESC, vote_count DESC LIMIT 20;"
+                
+                if target_genres:
+                    genre_clauses = " OR ".join(["genres LIKE ?" for _ in target_genres])
+                    sql += f" AND ({genre_clauses})"
+                    for g in target_genres:
+                        params.append(f"%{g}%")
+
+                sql += " ORDER BY rating DESC, vote_count DESC LIMIT 80;"
                 cursor.execute(sql, params)
-                rows = cursor.fetchall()
+                db_candidates = cursor.fetchall()
                 conn.close()
 
-                for row in rows:
-                    if len(results) >= limit:
-                        break
-                    title = row["title"]
-                    if title.lower() in seen_titles:
-                        continue
-                    seen_titles.add(title.lower())
+                # Score candidates with SentenceTransformer
+                if db_candidates:
+                    cand_texts = [f"{c['title']} {c['genres']} {c['overview']}" for c in db_candidates]
+                    cand_embeddings = self.model.encode(cand_texts, normalize_embeddings=True).astype(np.float32)
+                    query_vec = self.model.encode(search_query, normalize_embeddings=True).astype(np.float32)
+                    
+                    sims = np.dot(cand_embeddings, query_vec)
+                    
+                    for idx, c in enumerate(db_candidates):
+                        title = c["title"]
+                        if title.lower() in seen_titles:
+                            continue
+                        seen_titles.add(title.lower())
 
-                    genres_list = [g.strip() for g in str(row["genres"]).split(",") if g.strip()]
-                    match_reason = self.generate_match_reason(
-                        title=title,
-                        genres=row["genres"],
-                        year=row["year"],
-                        rating=row["rating"],
-                        intent=intent
-                    )
+                        raw_sim = float(sims[idx])
+                        rating = float(c["rating"])
+                        norm_rating = min(1.0, max(0.0, (rating - 5.0) / 5.0))
+                        final_score = 0.75 * raw_sim + 0.25 * norm_rating
 
-                    results.append({
-                        "rank": len(results) + 1,
-                        "id": int(row["id"]),
-                        "title": title,
-                        "year": int(row["year"]),
-                        "genres": genres_list,
-                        "overview": str(row["overview"]),
-                        "rating": float(row["rating"]),
-                        "vote_count": int(row["vote_count"]),
-                        "director": "Acclaimed Director",
-                        "poster_path": str(row["poster_path"]),
-                        "similarity_score": 0.86,
-                        "final_score": 0.88,
-                        "match_reason": match_reason
-                    })
+                        genres_list = [g.strip() for g in str(c["genres"]).split(",") if g.strip()]
+                        match_reason = self.generate_match_reason(
+                            title=title,
+                            genres=c["genres"],
+                            year=c["year"],
+                            rating=rating,
+                            intent=intent
+                        )
+
+                        results.append({
+                            "rank": len(results) + 1,
+                            "id": int(c["id"]),
+                            "title": title,
+                            "year": int(c["year"]),
+                            "genres": genres_list,
+                            "overview": str(c["overview"]),
+                            "rating": rating,
+                            "vote_count": int(c["vote_count"]),
+                            "director": "Acclaimed Director",
+                            "poster_path": str(c["poster_path"]),
+                            "similarity_score": round(raw_sim, 2),
+                            "final_score": round(final_score, 2),
+                            "match_reason": match_reason
+                        })
             except Exception as e:
-                logger.warning(f"SQLite query exception: {e}")
+                logger.warning(f"SQLite 250k dynamic search error: {e}")
+
+        # 2. Sort by final score
+        results.sort(key=lambda x: x.get("final_score", 0), reverse=True)
+        for i, r in enumerate(results):
+            r["rank"] = i + 1
 
         return results[:limit]
