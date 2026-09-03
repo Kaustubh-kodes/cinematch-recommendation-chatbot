@@ -33,3 +33,7 @@ yarn-error.log*
 # OS
 .DS_Store
 Thumbs.db
+
+.env
+.env.local
+*.env

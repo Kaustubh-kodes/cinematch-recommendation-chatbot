@@ -37,7 +37,7 @@ class LLMProvider(ABC):
 class GeminiProvider(LLMProvider):
     """Gemini-backed LLM implementation using Google GenAI SDK."""
     
-    def __init__(self, api_key: str, model_name: str = "gemini-1.5-flash"):
+    def __init__(self, api_key: str, model_name: str = "gemini-3.7-flash"):
         self.api_key = api_key
         genai.configure(api_key=api_key)
         self.model_name = model_name
