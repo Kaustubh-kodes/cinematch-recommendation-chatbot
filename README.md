@@ -7,7 +7,9 @@
 ![Python](https://img.shields.io/badge/Python%203.13-3776AB?style=for-the-badge&logo=python&logoColor=white)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-black?style=for-the-badge&logo=tailwind-css&logoColor=red)
 ![SciPy](https://img.shields.io/badge/SciPy%20SVD-8CAAE6?style=for-the-badge&logo=scipy&logoColor=white)
-![Gemini AI](https://img.shields.io/badge/Google%20Gemini-8E75B2?style=for-the-badge&logo=google%20gemini&logoColor=white)
+![Gemini AI]
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-GitHub%20Pages-red?style=for-the-badge&logo=github)](https://kaustubh-kodes.github.io/cinematch-recommendation-chatbot/)
+(https://img.shields.io/badge/Google%20Gemini-8E75B2?style=for-the-badge&logo=google%20gemini&logoColor=white)
 
 **An intelligent, high-performance hybrid recommendation platform combining sparse NLP (TF-IDF), collaborative matrix factorization (SVD & Item-Item), user preference extraction, and grounded LLM explainability.**
 
@@ -159,7 +161,7 @@ This repository includes a preconfigured GitHub Actions CI/CD workflow (`.github
 1.  Push the repository to GitHub on branch `main`.
 2.  In your GitHub repository, go to **Settings → Pages**.
 3.  Under **Build and deployment → Source**, select **GitHub Actions**.
-4.  Your dashboard is automatically built and deployed live at `https://<username>.github.io/cinematch/`.
+4.  Your dashboard is automatically built and deployed live at `https://kaustubh-kodes.github.io/cinematch-recommendation-chatbot/`.
 
 ---
 
@@ -199,4 +201,4 @@ cinematch/
 
 ## 📄 License
 
-MIT License © 2026 CineMatch Team.
+MIT License © 2026 Kaustubh Tiwari ([@Kaustubh-kodes](https://github.com/Kaustubh-kodes)).
